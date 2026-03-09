@@ -10,7 +10,6 @@ GRUP_ID = "-1003385313491"
 
 bot = telebot.TeleBot(TOKEN)
 
-# --- MERA KOORDİNATLARI ---
 MERALAR_1 = {
     "SİLİVRİ": (41.074, 28.248), 
     "BÜYÜKÇEKMECE": (41.021, 28.579),
@@ -45,14 +44,6 @@ def bulut_durumu(oran):
     elif oran < 80: return "Parçalı"
     else: return "Çok Bulutlu"
 
-def av_analizi(su_isi):
-    if su_isi < 10.0:
-        return f"Su sıcaklığı {su_isi}°C. Düşük sıcaklık nedeniyle balık uyuşuktur ve dipte kalmayı tercih eder."
-    elif su_isi < 16.0:
-        return f"Su sıcaklığı {su_isi}°C. İdeal avlanma sıcaklığına yakın, orta seviye aktivite beklenir."
-    else:
-        return f"Su sıcaklığı {su_isi}°C. Su sıcaklığı yüksek, balıklar aktif yemlenme periyodunda olabilir."
-
 def veri_cek(lat, lon):
     try:
         url = f"https://api.open-meteo.com/v1/forecast?latitude={lat}&longitude={lon}&current_weather=True&hourly=surface_pressure,cloudcover,precipitation,temperature_2m&models=best_match"
@@ -64,8 +55,7 @@ def veri_cek(lat, lon):
             m_res = requests.get(m_url, timeout=10).json()
             dalga = m_res['current']['wave_height']
             akinti = m_res['current']['ocean_current_velocity'] * 1.94384 
-            dalga_yonu_derece = m_res['current']['wave_direction']
-            dalga_yonu_str = ruzgar_yonu(dalga_yonu_derece)
+            dalga_yonu_str = ruzgar_yonu(m_res['current']['wave_direction'])
         except:
             dalga = 0.26
             akinti = 1.1
@@ -80,7 +70,7 @@ def veri_cek(lat, lon):
             "dalga": round(dalga, 2) if dalga else 0.2,
             "dalga_yonu": dalga_yonu_str,
             "hava_isi": round(cw['temperature'], 1),
-            "su_isi": round(cw['temperature'] + 1.7, 1), 
+            "su_isi": round(cw['temperature'] + 1.5, 1), 
             "basinc": round(res['hourly']['surface_pressure'][0], 1),
             "yagis": yagis_str,
             "akinti": round(akinti, 1) if akinti else 0.5,
@@ -156,12 +146,8 @@ def rapor_olustur(hedef_id):
                     f" ┗ ☁️ Bulut: %{d['bulut_oran']} ({d['bulut_str']})\n"
                 )
 
-        av_metni = av_analizi(genel['su_isi'])
         msg2 += (
             "\n───────────────────\n"
-            "🎣 AV VE SU SICAKLIĞI ANALİZİ\n"
-            f"● Analiz: {av_metni}\n"
-            "───────────────────\n"
             "🛡️ VERİ DOĞRULAMA:\n"
             "Bu rapordaki tüm analizler, Balık Seansı Veri Analiz Yazılımı üzerinden kıyı istasyonlarından %100 canlı olarak derlenmektedir.\n"
             "───────────────────\n"
@@ -172,20 +158,20 @@ def rapor_olustur(hedef_id):
         )
 
         bot.send_message(hedef_id, msg2)
-        print(f"Rapor {hedef_id} adresine başarıyla fırlatıldı.")
+        print(f"Rapor {hedef_id} adresine fırlatıldı.")
         
     except Exception as e:
         print(f"HATA: {e}")
 
 @bot.message_handler(func=lambda message: message.text and message.text.lower() == "hava durumu")
 def manuel_sorgu(message):
-    # SADECE SENİN İD VE GRUP İD'NE İZİN VERİR! BAŞKASI YAZAMAZ.
-    if str(message.chat.id) in [GRUP_ID, SAHSI_ID]:
+    # SADECE BELİRTİLEN ID'LERE CEVAP VERİR
+    if str(message.chat.id) == GRUP_ID or str(message.chat.id) == SAHSI_ID:
         bot.reply_to(message, "⏳ Balık Seansı güncel verileri çekiyor, lütfen bekleyin...")
         rapor_olustur(message.chat.id)
 
 def otomatik_dongu():
-    print("Otomatiğe bağlandı. 3 Saatlik döngü başlatılıyor...")
+    print("Otomatiğe bağlandı. İlk rapor fırlatılıyor...")
     rapor_olustur(GRUP_ID)
     while True:
         time.sleep(10800)
