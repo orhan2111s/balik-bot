@@ -2,26 +2,12 @@ import time
 import threading
 import requests
 import telebot
-import os
-from http.server import HTTPServer, BaseHTTPRequestHandler
 
-# --- SENİN ÖZEL BİLGİLERİN ---
+# --- KESİN AYARLAR ---
 TOKEN = "8245923172:AAFasi-hDWdRQtSp5iEENqFjM2RdXKDK6Nk"
-GRUP_ID = "-1003385313491"  # Sadece bu gruba atacak
-SAHSI_ID = "1585351156"    # Sadece sana atacak
+GRUP_ID = "-1003385313491"
+SAHSI_ID = "1585351156"
 bot = telebot.TeleBot(TOKEN)
-
-# Render "Port" hatası vermesin diye küçük bir sunucu
-class HealthCheck(BaseHTTPRequestHandler):
-    def do_GET(self):
-        self.send_response(200)
-        self.end_headers()
-        self.wfile.write(b"Bot Aktif")
-
-def run_health_server():
-    port = int(os.environ.get("PORT", 8080))
-    server = HTTPServer(('0.0.0.0', port), HealthCheck)
-    server.serve_forever()
 
 MERALAR_1 = {
     "SİLİVRİ": (41.074, 28.248), "BÜYÜKÇEKMECE": (41.021, 28.579),
@@ -54,55 +40,82 @@ def bulut_durumu(oran):
 
 def veri_cek(lat, lon):
     try:
-        url = f"https://api.open-meteo.com/v1/forecast?latitude={lat}&longitude={lon}&current_weather=True&hourly=surface_pressure,cloudcover,precipitation,temperature_2m"
+        url = f"https://api.open-meteo.com/v1/forecast?latitude={lat}&longitude={lon}&current_weather=True&hourly=surface_pressure,cloudcover,precipitation,temperature_2m&models=best_match"
         res = requests.get(url, timeout=15).json()
         cw = res['current_weather']
         try:
             m_url = f"https://marine-api.open-meteo.com/v1/marine?latitude={lat}&longitude={lon}&current=wave_height,ocean_current_velocity"
             m_res = requests.get(m_url, timeout=15).json()
-            dalga, akinti = m_res['current']['wave_height'], m_res['current']['ocean_current_velocity'] * 1.94
-        except: dalga, akinti = 0.26, 1.1
+            dalga = m_res['current']['wave_height']
+            akinti = m_res['current']['ocean_current_velocity'] * 1.94384 
+        except:
+            dalga, akinti = 0.26, 1.1
         yagis = res['hourly']['precipitation'][0]
+        yagis_str = "Yağış Yok" if yagis == 0 else f"{yagis} mm"
         return {
-            "hizi": cw['windspeed'], "yonu": ruzgar_yonu(cw['winddirection']),
-            "dalga": round(dalga, 2), "h_isi": cw['temperature'],
-            "s_isi": round(cw['temperature'] + 1.5, 1), "basinc": res['hourly']['surface_pressure'][0],
-            "yagis": "Yok" if yagis == 0 else f"{yagis} mm", "akinti": round(akinti, 1),
-            "b_oran": res['hourly']['cloudcover'][0], "b_str": bulut_durumu(res['hourly']['cloudcover'][0])
+            "ruzgar_hizi": cw['windspeed'],
+            "ruzgar_yonu": ruzgar_yonu(cw['winddirection']),
+            "dalga": round(dalga, 2) if dalga else 0.2,
+            "hava_isi": cw['temperature'],
+            "su_isi": round(cw['temperature'] + 1.5, 1), 
+            "basinc": res['hourly']['surface_pressure'][0],
+            "yagis": yagis_str,
+            "akinti": round(akinti, 1) if akinti else 0.5,
+            "bulut_oran": res['hourly']['cloudcover'][0],
+            "bulut_str": bulut_durumu(res['hourly']['cloudcover'][0])
         }
     except: return None
 
 def rapor_olustur(hedef_id):
     saat = time.strftime('%d.%m.%Y - %H:%M')
+    genel = veri_cek(41.017, 28.973) 
+    if not genel: return
+
     # --- 1. PARÇA ---
     msg1 = (
         "🚨 DİKKAT! BU RAPOR 3 SAATTE BİR OTOMATİK ATILIR.\n"
+        "⛔ KEYFİ SORGULAMA YAPMAK YASAKTIR!\n\n"
         "⚓️ BALIK SEANSI MARMARA RAPORU (1/2)\n"
-        f"🗓 SAAT: {saat}\n───────────────────\n"
+        f"🗓 SAAT: {saat}\n"
+        "───────────────────\n"
+        "📊 GENEL HAVA VE DENİZ ANALİZİ\n"
+        f" ┣ 💨 Rüzgar: {genel['ruzgar_hizi']} km/h ({genel['ruzgar_yonu']})\n"
+        f" ┣ 📏 Dalga: {genel['dalga']} Mt ({genel['ruzgar_yonu']})\n"
+        f" ┣ ☁️ Gökyüzü: %{genel['bulut_oran']} ({genel['bulut_str']})\n"
+        f" ┣ 🌡️ Hava Isısı: {genel['hava_isi']} °C\n"
+        f" ┣ 🌊 Su Isısı: {genel['su_isi']} °C\n"
+        f" ┣ 📉 Basınç: {genel['basinc']} hPa\n"
+        f" ┗ 🌧️ Yağış: {genel['yagis']}\n"
+        "───────────────────\n"
+        "⚓️ BATI VE MERKEZ AVRUPA\n"
     )
     for isim, coord in MERALAR_1.items():
         d = veri_cek(coord[0], coord[1])
-        if d: msg1 += f"\n📍 {isim}:\n ┣ 💨 {d['hizi']} km/h ({d['yonu']})\n ┣ 📏 {d['dalga']} Mt | 🌊 {d['akinti']} Kt\n ┗ 🌡 {d['h_isi']} °C | 📉 {d['basinc']} hPa | 🌧 {d['yagis']}\n"
+        if d:
+            msg1 += f"\n📍 {isim}:\n ┣ 💨 Rüzgar: {d['ruzgar_hizi']} km/h ({d['ruzgar_yonu']})\n ┣ 📏 Dalga: {d['dalga']} Mt | 🌊 Akıntı: {d['akinti']} Kt\n ┗ 🌡️ {d['hava_isi']} °C | 📉 {d['basinc']} hPa | ☁️ %{d['bulut_oran']}\n"
     
     try:
         bot.send_message(hedef_id, msg1)
         time.sleep(3)
         # --- 2. PARÇA ---
-        msg2 = "⚓️ BALIK SEANSI MARMARA RAPORU (2/2)\n───────────────────\n"
+        msg2 = "⚓️ BALIK SEANSI MARMARA RAPORU (2/2)\n───────────────────\n### 🕌 BOĞAZ VE ANADOLU HATTI\n"
         for isim, coord in MERALAR_2.items():
             d = veri_cek(coord[0], coord[1])
-            if d: msg2 += f"\n📍 {isim}:\n ┣ 💨 {d['hizi']} km/h ({d['yonu']})\n ┣ 📏 {d['dalga']} Mt | 🌊 {d['akinti']} Kt\n ┗ 🌡 {d['h_isi']} °C | 📉 {d['basinc']} hPa | 🌧 {d['yagis']}\n"
-        bot.send_message(hedef_id, msg2 + "\n© Balık Seansı Veri Analizi")
+            if d:
+                msg2 += f"\n📍 {isim}:\n ┣ 💨 Rüzgar: {d['ruzgar_hizi']} km/h ({d['ruzgar_yonu']})\n ┣ 📏 Dalga: {d['dalga']} Mt | 🌊 Akıntı: {d['akinti']} Kt\n ┗ 🌡️ {d['hava_isi']} °C | 📉 {d['basinc']} hPa | ☁️ %{d['bulut_oran']}\n"
+        
+        msg2 += "\n───────────────────\n© Balık Seansı Veri Analiz Yazılımı - Tüm Hakları Saklıdır.\nKeyifli avlar dilerim."
+        bot.send_message(hedef_id, msg2)
+        print(f"Rapor {hedef_id} adresine başarıyla atıldı!")
     except Exception as e: print(f"Hata: {e}")
 
 @bot.message_handler(func=lambda message: message.text and message.text.lower() == "hava durumu")
-def manuel(message):
-    # GÜVENLİK: Sadece senin grubun veya sen yazarsan cevap verir
+def manuel_sorgu(message):
     if str(message.chat.id) in [GRUP_ID, SAHSI_ID]:
-        bot.reply_to(message, "⏳ Veriler çekiliyor...")
+        bot.reply_to(message, "⏳ Balık Seansı güncel verileri çekiyor, lütfen bekleyin...")
         rapor_olustur(message.chat.id)
 
-def dongu():
+def otomatik_dongu():
     rapor_olustur(GRUP_ID)
     rapor_olustur(SAHSI_ID)
     while True:
@@ -110,6 +123,7 @@ def dongu():
         rapor_olustur(GRUP_ID)
 
 if __name__ == "__main__":
-    threading.Thread(target=run_health_server, daemon=True).start()
-    threading.Thread(target=dongu, daemon=True).start()
+    t = threading.Thread(target=otomatik_dongu, daemon=True)
+    t.start()
+    print("Bot aktif! Sadece tanımlı grupta çalışıyor.")
     bot.infinity_polling()
