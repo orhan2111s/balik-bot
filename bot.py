@@ -1,9 +1,3 @@
-killall python
-killall python3
-pkill -f bot.py
-rm bot.py
-
-cat > bot.py << 'EOF'
 import time
 import threading
 import requests
@@ -163,7 +157,7 @@ def rapor_olustur(hedef_id):
 
 @bot.message_handler(func=lambda message: message.text and message.text.lower() == "hava durumu")
 def manuel_sorgu(message):
-    # PATRON KİLİDİ: SADECE SEN (1585351156) "hava durumu" YAZARSAN CEVAP VERİR
+    # PATRON KİLİDİ: SADECE SEN (1585351156) YAZARSAN CEVAP VERİR
     if str(message.from_user.id) == SAHSI_ID:
         bot.reply_to(message, "⏳ Balık Seansı güncel verileri çekiyor, lütfen bekleyin...")
         rapor_olustur(message.chat.id)
@@ -179,6 +173,3 @@ if __name__ == "__main__":
     t.daemon = True
     t.start()
     bot.infinity_polling()
-EOF
-
-nohup python3 bot.py > bot_log.txt 2>&1 &
