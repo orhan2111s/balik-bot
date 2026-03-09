@@ -32,115 +32,81 @@ def ruzgar_yonu(derece):
     elif 247.5 <= derece < 292.5: return "Günbatısı (B)"
     else: return "Karayel (KB)"
 
-def bulut_durumu(oran):
-    if oran < 20: return "Açık"
-    elif oran < 50: return "Az Bulutlu"
-    elif oran < 80: return "Parçalı"
-    else: return "Çok Bulutlu"
-
 def veri_cek(lat, lon):
     try:
         url = f"https://api.open-meteo.com/v1/forecast?latitude={lat}&longitude={lon}&current_weather=True&hourly=surface_pressure,cloudcover,precipitation,temperature_2m&models=best_match"
-        res = requests.get(url).json()
+        res = requests.get(url, timeout=10).json()
         cw = res['current_weather']
         
         try:
             m_url = f"https://marine-api.open-meteo.com/v1/marine?latitude={lat}&longitude={lon}&current=wave_height,ocean_current_velocity"
-            m_res = requests.get(m_url).json()
+            m_res = requests.get(m_url, timeout=10).json()
             dalga = m_res['current']['wave_height']
             akinti = m_res['current']['ocean_current_velocity'] * 1.94384 
         except:
-            dalga = 0.26
-            akinti = 1.1
+            dalga, akinti = 0.2, 1.1
 
         yagis = res['hourly']['precipitation'][0]
-        yagis_str = "Yağış Yok" if yagis == 0 else f"{yagis} mm"
+        yagis_str = "Yok" if yagis == 0 else f"{yagis}mm"
         
         return {
-            "ruzgar_hizi": cw['windspeed'],
-            "ruzgar_yonu": ruzgar_yonu(cw['winddirection']),
-            "dalga": round(dalga, 2) if dalga else 0.2,
-            "hava_isi": cw['temperature'],
-            "su_isi": round(cw['temperature'] + 1.5, 1), 
+            "hiz": cw['windspeed'],
+            "yon": ruzgar_yonu(cw['winddirection']),
+            "dalga": round(dalga, 2),
+            "isi": cw['temperature'],
             "basinc": res['hourly']['surface_pressure'][0],
             "yagis": yagis_str,
-            "akinti": round(akinti, 1) if akinti else 0.5,
-            "bulut_oran": res['hourly']['cloudcover'][0],
-            "bulut_str": bulut_durumu(res['hourly']['cloudcover'][0])
+            "akinti": round(akinti, 1),
+            "bulut": res['hourly']['cloudcover'][0]
         }
     except: return None
 
 def rapor_olustur(hedef_id):
     saat = time.strftime('%d.%m.%Y - %H:%M')
-    genel = veri_cek(41.017, 28.973) 
-    if not genel: return
-
-    # --- 1. PARÇA ---
-    msg1 = (
-        "🚨 DİKKAT! BU RAPOR 3 SAATTE BİR OTOMATİK ATILIR.\n"
-        "⚓️ BALIK SEANSI MARMARA RAPORU (1/2)\n"
-        f"🗓 SAAT: {saat}\n"
-        "───────────────────\n"
-        "📊 GENEL HAVA VE DENİZ ANALİZİ\n"
-        f" ┣ 💨 Rüzgar: {genel['ruzgar_hizi']} km/h ({genel['ruzgar_yonu']})\n"
-        f" ┣ 📏 Dalga: {genel['dalga']} Mt ({genel['ruzgar_yonu']})\n"
-        f" ┣ 🌡️ Hava Isısı: {genel['hava_isi']} °C\n"
-        f" ┗ 🌊 Su Isısı: {genel['su_isi']} °C\n"
-        "───────────────────\n"
-        "⚓️ BATI VE MERKEZ AVRUPA\n"
-    )
-
-    for isim, coord in MERALAR_1.items():
-        d = veri_cek(coord[0], coord[1])
+    
+    # --- 1. PARÇA (AVRUPA) ---
+    msg1 = f"🚨 *BALIK SEANSI ANALİZİ (1/2)*\n🗓 {saat}\n"
+    msg1 += "───────────────────\n"
+    for m, c in MERALAR_1.items():
+        d = veri_cek(c[0], c[1])
         if d:
-            msg1 += f"\n📍 {isim}: {d['ruzgar_hizi']} km/h {d['ruzgar_yonu']} | Dalga: {d['dalga']} Mt\n"
-
-    try:
-        bot.send_message(hedef_id, msg1)
-    except: pass
-
-    time.sleep(3) 
-
-    # --- 2. PARÇA ---
-    msg2 = (
-        "⚓️ BALIK SEANSI MARMARA RAPORU (2/2)\n"
-        "───────────────────\n"
-        "🕌 BOĞAZ VE ANADOLU HATTI\n"
-    )
-
-    for isim, coord in MERALAR_2.items():
-        d = veri_cek(coord[0], coord[1])
-        if d:
-            msg2 += f"\n📍 {isim}: {d['ruzgar_hizi']} km/h {d['ruzgar_yonu']} | Dalga: {d['dalga']} Mt\n"
-
-    msg2 += "\n© Balık Seansı Veri Analiz Yazılımı - Tüm Hakları Saklıdır."
+            msg1 += f"📍 *{m}:*\n"
+            msg1 += f"┣ 💨 {d['hiz']}km/h {d['yon']}\n"
+            msg1 += f"┣ 📏 Dalga: {d['dalga']}mt | 🌊 Akıntı: {d['akinti']}kt\n"
+            msg1 += f"┗ 🌡 {d['isi']}°C | 📉 {d['basinc']}hPa | 🌧 {d['yagis']}\n"
     
     try:
-        bot.send_message(hedef_id, msg2)
-    except: pass
+        bot.send_message(hedef_id, msg1, parse_mode="Markdown")
+        time.sleep(3)
+        
+        # --- 2. PARÇA (ANADOLU) ---
+        msg2 = f"🚨 *BALIK SEANSI ANALİZİ (2/2)*\n───────────────────\n"
+        for m, c in MERALAR_2.items():
+            d = veri_cek(c[0], c[1])
+            if d:
+                msg2 += f"📍 *{m}:*\n"
+                msg2 += f"┣ 💨 {d['hiz']}km/h {d['yon']}\n"
+                msg2 += f"┣ 📏 Dalga: {d['dalga']}mt | 🌊 Akıntı: {d['akinti']}kt\n"
+                msg2 += f"┗ 🌡 {d['isi']}°C | 📉 {d['basinc']}hPa | 🌧 {d['yagis']}\n"
+        
+        msg2 += "\n© Balık Seansı Tüm Hakları Saklıdır."
+        bot.send_message(hedef_id, msg2, parse_mode="Markdown")
+    except Exception as e:
+        print(f"Hata oluştu: {e}")
 
-@bot.message_handler(func=lambda message: message.text and message.text.lower() == "hava durumu")
-def manuel_sorgu(message):
-    bot.reply_to(message, "⏳ Balık Seansı güncel verileri çekiyor...")
+@bot.message_handler(func=lambda m: m.text and m.text.lower() == "hava durumu")
+def manuel(message):
+    bot.reply_to(message, "⏳ Tüm istasyonlardan veri çekiliyor, bekleyin...")
     rapor_olustur(message.chat.id)
 
-def otomatik_dongu():
-    # İlk raporu hem gruba hem sana atar
-    try:
-        rapor_olustur(GRUP_ID)
-        rapor_olustur(SAHSI_ID)
-    except: pass
-    
+def dongu():
+    rapor_olustur(GRUP_ID)
+    rapor_olustur(SAHSI_ID)
     while True:
-        time.sleep(10800) # 3 saat
-        try:
-            rapor_olustur(GRUP_ID)
-        except: pass
+        time.sleep(10800)
+        rapor_olustur(GRUP_ID)
 
 if __name__ == "__main__":
-    t = threading.Thread(target=otomatik_dongu)
-    t.daemon = True
-    t.start()
-    
-    print("Bot aktif! Grubu ve seni dinliyor...")
+    threading.Thread(target=dongu, daemon=True).start()
+    print("Bot aktif! Detaylı mod çalışıyor...")
     bot.infinity_polling()
