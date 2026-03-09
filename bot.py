@@ -35,52 +35,69 @@ def ruzgar_yonu(derece):
 def veri_cek(lat, lon):
     try:
         url = f"https://api.open-meteo.com/v1/forecast?latitude={lat}&longitude={lon}&current_weather=True&hourly=surface_pressure,cloudcover,precipitation,temperature_2m&models=best_match"
-        res = requests.get(url, timeout=10).json()
+        res = requests.get(url, timeout=15).json()
         cw = res['current_weather']
+        
         try:
             m_url = f"https://marine-api.open-meteo.com/v1/marine?latitude={lat}&longitude={lon}&current=wave_height,ocean_current_velocity"
-            m_res = requests.get(m_url, timeout=10).json()
+            m_res = requests.get(m_url, timeout=15).json()
             dalga = m_res['current']['wave_height']
             akinti = m_res['current']['ocean_current_velocity'] * 1.94384 
         except:
-            dalga, akinti = 0.2, 1.1
+            dalga, akinti = 0.25, 1.1
+
         return {
             "hiz": cw['windspeed'], "yon": ruzgar_yonu(cw['winddirection']),
             "dalga": round(dalga, 2), "isi": cw['temperature'],
             "basinc": res['hourly']['surface_pressure'][0],
             "yagis": "Yok" if res['hourly']['precipitation'][0] == 0 else "Var",
-            "akinti": round(akinti, 1)
+            "akinti": round(akinti, 1), "bulut": res['hourly']['cloudcover'][0]
         }
     except: return None
 
 def rapor_olustur(hedef_id):
     saat = time.strftime('%d.%m.%Y - %H:%M')
-    msg1 = f"🚨 *BALIK SEANSI ANALİZİ*\n🗓 {saat}\n"
+    
+    # --- 1. PARÇA ---
+    msg1 = f"🚨 *BALIK SEANSI ANALİZİ (1/2)*\n🗓 {saat}\n"
     msg1 += "───────────────────\n"
-    for m, c in {**MERALAR_1, **MERALAR_2}.items():
+    for m, c in MERALAR_1.items():
         d = veri_cek(c[0], c[1])
         if d:
             msg1 += f"📍 *{m}:* {d['hiz']}km/h {d['yon']} | 🌊 {d['dalga']}mt | 🌡 {d['isi']}°C\n"
     
-    msg1 += "\n© Balık Seansı"
     try:
         bot.send_message(hedef_id, msg1, parse_mode="Markdown")
-        print(f"Rapor {hedef_id} gönderildi.")
+        print(f"1. mesaj {hedef_id} adresine gitti.")
+        time.sleep(3) # Telegramı yormamak için bekletme
+        
+        # --- 2. PARÇA ---
+        msg2 = f"🚨 *BALIK SEANSI ANALİZİ (2/2)*\n───────────────────\n"
+        for m, c in MERALAR_2.items():
+            d = veri_cek(c[0], c[1])
+            if d:
+                msg2 += f"📍 *{m}:* {d['hiz']}km/h {d['yon']} | 🌊 {d['dalga']}mt | 🌡 {d['isi']}°C\n"
+        
+        msg2 += "\n© Balık Seansı"
+        bot.send_message(hedef_id, msg2, parse_mode="Markdown")
+        print(f"2. mesaj {hedef_id} adresine gitti.")
     except Exception as e:
-        print(f"Hata: {e}")
+        print(f"HATA OLUŞTU: {e}")
 
 @bot.message_handler(func=lambda m: m.text and m.text.lower() == "hava durumu")
 def manuel(message):
-    bot.reply_to(message, "⏳ Veriler çekiliyor...")
+    bot.reply_to(message, "⏳ İstasyonlara bağlanılıyor...")
     rapor_olustur(message.chat.id)
 
 def dongu():
+    # Başlarken bir tane fırlat
+    rapor_olustur(GRUP_ID)
+    rapor_olustur(SAHSI_ID)
     while True:
-        rapor_olustur(GRUP_ID)
-        rapor_olustur(SAHSI_ID)
         time.sleep(10800)
+        rapor_olustur(GRUP_ID)
 
 if __name__ == "__main__":
     threading.Thread(target=dongu, daemon=True).start()
     print("Bot aktif! Grubu ve seni dinliyor...")
-    bot.infinity_polling(timeout=20, long_polling_timeout=10)
+    bot.infinity_polling(timeout=20)
