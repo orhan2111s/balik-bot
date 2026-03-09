@@ -9,9 +9,9 @@ import threading
 import requests
 import telebot
 
-TOKEN = "8245923172:AAFasi-hDWdRQtSp5iEENqFjM2RdXKDK6Nk"
-SAHSI_ID = "1585351156"
+TOKEN = "8701962843:AAFnZ3WuqthnMwW36PXnQRs5UPYgGKZkazQ"
 GRUP_ID = "-1003385313491"
+SAHSI_ID = "1585351156"
 
 bot = telebot.TeleBot(TOKEN)
 
@@ -63,12 +63,12 @@ def veri_cek(lat, lon):
         yagis_str = "Yağış Yok" if yagis == 0 else f"{yagis} mm"
         
         return {
-            "ruzgar_hizi": round(cw['windspeed'], 1),
+            "ruzgar_hizi": cw['windspeed'],
             "ruzgar_yonu": ruzgar_yonu(cw['winddirection']),
             "dalga": round(dalga, 2) if dalga else 0.2,
-            "hava_isi": round(cw['temperature'], 1),
+            "hava_isi": cw['temperature'],
             "su_isi": round(cw['temperature'] + 1.5, 1), 
-            "basinc": round(res['hourly']['surface_pressure'][0], 1),
+            "basinc": res['hourly']['surface_pressure'][0],
             "yagis": yagis_str,
             "akinti": round(akinti, 1) if akinti else 0.5,
             "bulut_oran": res['hourly']['cloudcover'][0],
@@ -79,7 +79,9 @@ def veri_cek(lat, lon):
 def rapor_olustur(hedef_id):
     saat = time.strftime('%d.%m.%Y - %H:%M')
     genel = veri_cek(41.017, 28.973) 
-    if not genel: return
+    if not genel: 
+        print("Veri çekilemedi!")
+        return
 
     # --- 1. PARÇA ---
     msg1 = (
@@ -116,46 +118,53 @@ def rapor_olustur(hedef_id):
             )
 
     try:
+        print("1. Parça gönderiliyor...")
         bot.send_message(hedef_id, msg1)
-        time.sleep(3) 
-
-        # --- 2. PARÇA ---
-        msg2 = (
-            "⚓️ BALIK SEANSI MARMARA RAPORU (2/2)\n"
-            "───────────────────\n"
-            "### 🕌 BOĞAZ VE ANADOLU HATTI\n"
-        )
-
-        for isim, coord in MERALAR_2.items():
-            d = veri_cek(coord[0], coord[1])
-            if d:
-                msg2 += (
-                    f"\n📍 {isim}:\n"
-                    f" ┣ 💨 Rüzgar: {d['ruzgar_hizi']} km/h ({d['ruzgar_yonu']})\n"
-                    f" ┣ 📏 Dalga: {d['dalga']} Mt ({d['ruzgar_yonu']})\n"
-                    f" ┣ 🌡️ Hava Isısı: {d['hava_isi']} °C\n"
-                    f" ┣ 🌊 Su Isısı: {d['su_isi']} °C\n"
-                    f" ┣ 📉 Basınç: {d['basinc']} hPa\n"
-                    f" ┣ 🌧️ Yağış: {d['yagis']}\n"
-                    f" ┣ 🌊 Akıntı: {d['akinti']} Kt\n"
-                    f" ┗ ☁️ Bulut: %{d['bulut_oran']} ({d['bulut_str']})\n"
-                )
-
-        msg2 += (
-            "\n───────────────────\n"
-            "🛡️ VERİ DOĞRULAMA:\n"
-            "Bu rapordaki tüm analizler, Balık Seansı Veri Analiz Yazılımı üzerinden kıyı istasyonlarından %100 canlı olarak derlenmektedir.\n"
-            "───────────────────\n"
-            "> ⚖️ HUKUKİ UYARI VE FİKRİ MÜLKİYET HAKKI\n>\n"
-            "> Bu raporun içeriği, veri işleme algoritması ve görsel formatı 5846 sayılı Fikir ve Sanat Eserleri Kanunu kapsamında koruma altındadır. Balık Seansı'na ait olan bu verilerin izinsiz olarak farklı gruplarda paylaşılması veya yayınlanması kesinlikle yasaktır.\n>\n"
-            "> © Balık Seansı Veri Analiz Yazılımı - Tüm Hakları Saklıdır.\n\n"
-            "Keyifli avlar dilerim."
-        )
-
-        bot.send_message(hedef_id, msg2)
-        
+        print("1. Parça başarıyla atıldı!")
     except Exception as e:
-        pass
+        print("!!! 1. PARÇADA HATA ÇIKTI !!! ->", e)
+
+    time.sleep(3) 
+
+    # --- 2. PARÇA ---
+    msg2 = (
+        "⚓️ BALIK SEANSI MARMARA RAPORU (2/2)\n"
+        "───────────────────\n"
+        "### 🕌 BOĞAZ VE ANADOLU HATTI\n"
+    )
+
+    for isim, coord in MERALAR_2.items():
+        d = veri_cek(coord[0], coord[1])
+        if d:
+            msg2 += (
+                f"\n📍 {isim}:\n"
+                f" ┣ 💨 Rüzgar: {d['ruzgar_hizi']} km/h ({d['ruzgar_yonu']})\n"
+                f" ┣ 📏 Dalga: {d['dalga']} Mt ({d['ruzgar_yonu']})\n"
+                f" ┣ 🌡️ Hava Isısı: {d['hava_isi']} °C\n"
+                f" ┣ 🌊 Su Isısı: {d['su_isi']} °C\n"
+                f" ┣ 📉 Basınç: {d['basinc']} hPa\n"
+                f" ┣ 🌧️ Yağış: {d['yagis']}\n"
+                f" ┣ 🌊 Akıntı: {d['akinti']} Kt\n"
+                f" ┗ ☁️ Bulut: %{d['bulut_oran']} ({d['bulut_str']})\n"
+            )
+
+    msg2 += (
+        "\n───────────────────\n"
+        "🛡️ VERİ DOĞRULAMA:\n"
+        "Bu rapordaki tüm analizler, Balık Seansı Veri Analiz Yazılımı üzerinden kıyı istasyonlarından %100 canlı olarak derlenmektedir.\n"
+        "───────────────────\n"
+        "> ⚖️ HUKUKİ UYARI VE FİKRİ MÜLKİYET HAKKI\n>\n"
+        "> Bu raporun içeriği, veri işleme algoritması ve görsel formatı 5846 sayılı Fikir ve Sanat Eserleri Kanunu kapsamında koruma altındadır. Balık Seansı'na ait olan bu verilerin izinsiz olarak farklı gruplarda paylaşılması veya yayınlanması kesinlikle yasaktır.\n>\n"
+        "> © Balık Seansı Veri Analiz Yazılımı - Tüm Hakları Saklıdır.\n\n"
+        "Keyifli avlar dilerim."
+    )
+
+    try:
+        print("2. Parça gönderiliyor...")
+        bot.send_message(hedef_id, msg2)
+        print("2. Parça başarıyla atıldı!")
+    except Exception as e:
+        print("!!! 2. PARÇADA HATA ÇIKTI !!! ->", e)
 
 @bot.message_handler(func=lambda message: message.text and message.text.lower() == "hava durumu")
 def manuel_sorgu(message):
@@ -164,17 +173,20 @@ def manuel_sorgu(message):
         rapor_olustur(message.chat.id)
 
 def otomatik_dongu():
+    print("Otomatiğe bağlandı. İlk rapor şimdi gruba fırlatılıyor...")
     rapor_olustur(GRUP_ID)
     while True:
         time.sleep(10800)
+        print("3 Saat doldu, yeni rapor gruba fırlatılıyor...")
         rapor_olustur(GRUP_ID)
 
 if __name__ == "__main__":
     t = threading.Thread(target=otomatik_dongu)
     t.daemon = True
     t.start()
+    
+    print("Bot çalıştı! Grupta 'hava durumu' yazılmasını dinliyor...")
     bot.infinity_polling()
 EOF
 
 nohup python3 bot.py > bot_log.txt 2>&1 &
-echo "Eski botlar gebertildi, KUSURSUZ yeni kod çalıştırıldı!"
